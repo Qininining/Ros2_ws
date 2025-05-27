@@ -6,13 +6,13 @@ def generate_launch_description():
         Node(
             package='pkg_helloworld_cpp',
             executable='simple_publisher',
-            name='simple_publisher',
+            name='simple_publisher_node',
             output='screen'
         ),
         Node(
             package='pkg_helloworld_cpp',
             executable='simple_subscriber',
-            name='simple_subscriber',
+            name='simple_subscriber_node',
             output='screen'
         )
     ])

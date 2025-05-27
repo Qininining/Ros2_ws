@@ -5,7 +5,7 @@
 class SimplePublisher : public rclcpp::Node
 {
 public:
-  SimplePublisher() : Node("simple_publisher")
+  SimplePublisher() : Node("simple_publisher_node")
   {
     publisher_ = this->create_publisher<std_msgs::msg::String>("simple_topic", 10);
     timer_ = this->create_wall_timer(

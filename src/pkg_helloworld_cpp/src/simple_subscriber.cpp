@@ -5,7 +5,7 @@
 class SimpleSubscriber : public rclcpp::Node
 {
 public:
-  SimpleSubscriber() : Node("simple_subscriber")
+  SimpleSubscriber() : Node("simple_subscriber_node")
   {
     subscription_ = this->create_subscription<std_msgs::msg::String>(
       "simple_topic", 10,
