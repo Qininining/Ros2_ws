@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(helloworld src/helloworld.cpp)
 target_include_directories(helloworld PUBLIC
@@ -19,7 +20,16 @@ ament_target_dependencies(
   "rclcpp"
 )
 
-install(TARGETS helloworld
+add_executable(simple_publisher src/simple_publisher.cpp)
+ament_target_dependencies(simple_publisher rclcpp std_msgs)
+
+add_executable(simple_subscriber src/simple_subscriber.cpp)
+ament_target_dependencies(simple_subscriber rclcpp std_msgs)
+
+install(TARGETS
+  helloworld
+  simple_publisher
+  simple_subscriber
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch
