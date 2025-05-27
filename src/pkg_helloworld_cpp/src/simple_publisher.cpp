@@ -7,7 +7,7 @@ class SimplePublisher : public rclcpp::Node
 public:
   SimplePublisher() : Node("simple_publisher")
   {
-    publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::String>("simple_topic", 10);
     timer_ = this->create_wall_timer(
       std::chrono::seconds(1),
       [this]() {
