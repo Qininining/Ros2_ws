@@ -9,12 +9,16 @@ public:
   {
     subscription_ = this->create_subscription<std_msgs::msg::String>(
       "simple_topic", 10,
-      [this](std_msgs::msg::String::UniquePtr msg) {
-        RCLCPP_INFO(this->get_logger(), "Received: '%s'", msg->data.c_str());
-      });
+      std::bind(&SimpleSubscriber::topic_callback, this, std::placeholders::_1)
+    );
   }
 
 private:
+  void topic_callback(const std_msgs::msg::String::UniquePtr msg)
+  {
+    RCLCPP_INFO(this->get_logger(), "Received: '%s'", msg->data.c_str());
+  }
+
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
 };
 
