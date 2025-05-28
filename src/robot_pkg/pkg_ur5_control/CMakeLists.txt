@@ -9,7 +9,9 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
-# find_package(ur5_control REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
+# find_package(custom_interfaces REQUIRED)
 
 add_executable(ur5_joint_controller src/ur5_joint_controller.cpp)
 target_include_directories(ur5_joint_controller PUBLIC
@@ -24,6 +26,28 @@ ament_target_dependencies(
 )
 
 install(TARGETS ur5_joint_controller
+  DESTINATION lib/${PROJECT_NAME})
+
+add_executable(joint_state_subscriber src/joint_state_subscriber.cpp)
+ament_target_dependencies(
+  joint_state_subscriber
+  "rclcpp"
+  "sensor_msgs"
+  "std_msgs"
+  # "custom_interfaces"
+)
+
+install(TARGETS joint_state_subscriber
+  DESTINATION lib/${PROJECT_NAME})
+
+add_executable(velocity_command_publisher src/velocity_command_publisher.cpp)
+ament_target_dependencies(
+  velocity_command_publisher
+  "rclcpp"
+  "trajectory_msgs"
+)
+
+install(TARGETS velocity_command_publisher
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
