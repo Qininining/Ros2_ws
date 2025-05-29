@@ -52,15 +52,21 @@ add_executable(ur5_kinematics_controller src/ur5_kinematics_controller.cpp src/K
 ament_target_dependencies(ur5_kinematics_controller rclcpp std_msgs)
 target_link_libraries(ur5_kinematics_controller ${OpenCV_LIBS})  # 链接OpenCV库
 
+add_executable(ur5_fk_subscriber_node src/ur5_fk_subscriber.cpp src/KinematicsSolver.cpp)
+ament_target_dependencies(ur5_fk_subscriber_node rclcpp sensor_msgs) # 假设KinematicsSolver在pkg_ur5_control_lib中
+target_link_libraries(ur5_fk_subscriber_node ${OpenCV_LIBS})  # 链接OpenCV库
+
 install(TARGETS
   velocity_command_publisher
   ur5_kinematics_controller
+  ur5_fk_subscriber_node # 添加新的节点
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/
   DESTINATION include/
 )
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
