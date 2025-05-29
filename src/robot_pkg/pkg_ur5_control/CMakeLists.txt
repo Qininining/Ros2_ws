@@ -11,7 +11,12 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
-# find_package(custom_interfaces REQUIRED)
+find_package(OpenCV REQUIRED)  # 添加OpenCV依赖
+
+include_directories(
+  include
+  ${OpenCV_INCLUDE_DIRS}      # 添加OpenCV头文件路径
+)
 
 add_executable(ur5_joint_controller src/ur5_joint_controller.cpp)
 target_include_directories(ur5_joint_controller PUBLIC
@@ -41,14 +46,21 @@ install(TARGETS joint_state_subscriber
   DESTINATION lib/${PROJECT_NAME})
 
 add_executable(velocity_command_publisher src/velocity_command_publisher.cpp)
-ament_target_dependencies(
+ament_target_dependencies(velocity_command_publisher rclcpp std_msgs)
+
+add_executable(ur5_kinematics_controller src/ur5_kinematics_controller.cpp src/KinematicsSolver.cpp)
+ament_target_dependencies(ur5_kinematics_controller rclcpp std_msgs)
+target_link_libraries(ur5_kinematics_controller ${OpenCV_LIBS})  # 链接OpenCV库
+
+install(TARGETS
   velocity_command_publisher
-  "rclcpp"
-  "trajectory_msgs"
+  ur5_kinematics_controller
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-install(TARGETS velocity_command_publisher
-  DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY include/
+  DESTINATION include/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
