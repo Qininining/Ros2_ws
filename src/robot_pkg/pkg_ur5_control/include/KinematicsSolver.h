@@ -55,6 +55,8 @@ public:
      * @param q_initial_guess 关节角度的初始猜测。
      * @param tolerance 收敛容差 (基于误差旋量的范数)。
      * @param max_iterations 最大迭代次数。
+     * @param joint_limits 可选的关节限位，每个关节的最小和最大角度。
+     * @param lambda Damped Least Squares (DLS) 阻尼因子，默认为 0.1。
      * @return 计算得到的关节角度向量。
      * @throws ComputationFailedException 如果IK未能收敛或发生计算错误。
      * @throws InvalidInputException 如果初始猜测的大小与螺旋向量数量不匹配。
@@ -63,7 +65,10 @@ public:
         const cv::Matx44d& T_target,
         const std::vector<double>& q_initial_guess,
         double tolerance = 1e-6,
-        int max_iterations = 100);
+        int max_iterations = 100,
+        const std::vector<std::pair<double, double>>& joint_limits, // Added
+        double lambda = 0.1                                        // Added with default
+    );
 
     /**
      * @brief 计算关节速度以实现期望的末端执行器空间速度。

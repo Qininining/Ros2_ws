@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp> 
 #include <iomanip> 
 #include <cmath> // For M_PI, std::cos, std::sin
+#include <utility> // For std::pair, if not already included via other headers
 
 // Helper function to print cv::Matx44d (optional, for debugging)
 std::ostream& operator<<(std::ostream& os, const cv::Matx44d& mat) {
@@ -37,11 +38,12 @@ class UR5KinematicsController : public rclcpp::Node
 public:
     UR5KinematicsController()
     : Node("ur5_kinematics_controller"),
-      q_current_guess_({0.0, 0.0, 0.0, 0.0, 0.0, 0.0}), // Initial guess for M_home_ target
-      ik_tolerance_(1e-5),      // IK solver tolerance
-      ik_max_iterations_(500),  // IK solver max iterations
-      delta_translation_(0.02), // 2cm for translational steps
-      delta_rotation_(M_PI / 36.0) // 5 degrees for rotational steps
+      q_current_guess_({0.0, 0.0, 0.0, 0.0, 0.0, 0.0}), 
+      ik_tolerance_(1e-5),      
+      ik_max_iterations_(500),  
+      delta_translation_(0.02), 
+      delta_rotation_(M_PI / 36.0),
+      ik_lambda_(0.1) // 新增：DLS的阻尼因子 lambda
     {
         // Publisher for joint trajectory commands
         publisher_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
@@ -96,12 +98,22 @@ public:
             0.005596450592457, -0.00571659008736621, 0.816998900818537}   // Wrist 3 (S6)
         };
 
+        // 关节限位
+        joint_limits_ = {
+            {-2*pi, 2*pi},  // shoulder_pan_joint
+            {-2*pi, 2*pi},  // shoulder_lift_joint (实际可能不对称或更小)
+            {-pi, pi},      // elbow_joint (通常是 +/- PI 或类似)
+            {-2*pi, 2*pi},  // wrist_1_joint
+            {-2*pi, 2*pi},  // wrist_2_joint
+            {-2*pi, 2*pi}   // wrist_3_joint
+        };
+
 
         solver_ = std::make_shared<KinematicsSolver>(screw_axes, M_home_);
         RCLCPP_INFO(this->get_logger(), "UR5 Kinematics Solver initialized.");
         RCLCPP_INFO_STREAM(this->get_logger(), "Solver's M_initial (M_home):\n " << M_home_);
 
-        initial_safe_pose_ = M_home_; // Target this pose initially
+        initial_safe_pose_ = M_home_; 
         current_ee_target_pose_ = initial_safe_pose_;
 
         keyboard_subscriber_ = this->create_subscription<std_msgs::msg::String>(
@@ -175,7 +187,13 @@ private:
         RCLCPP_INFO_STREAM(this->get_logger(), "Using initial joint guess: " << q_current_guess_);
         try {
             std::vector<double> joint_angles = solver_->computeIK(
-                target_pose, q_current_guess_, ik_tolerance_, ik_max_iterations_);
+                target_pose, 
+                q_current_guess_, 
+                ik_tolerance_, 
+                ik_max_iterations_,
+                joint_limits_,      // 传递关节限位
+                ik_lambda_          // 传递DLS阻尼因子
+            );
 
             auto trajectory_msg = trajectory_msgs::msg::JointTrajectory();
             trajectory_msg.joint_names = {
@@ -184,7 +202,7 @@ private:
 
             trajectory_msgs::msg::JointTrajectoryPoint point;
             point.positions = joint_angles;
-            point.time_from_start.sec = 2; // As per request
+            point.time_from_start.sec = 2; 
             point.time_from_start.nanosec = 0;
             // Velocities, accelerations, and effort can be left empty if not used by the controller
             // point.velocities.resize(joint_angles.size(), 0.0);
@@ -199,7 +217,7 @@ private:
 
             RCLCPP_INFO_STREAM(this->get_logger(), "IK solution found. Publishing joint trajectory: " << joint_angles);
             publisher_->publish(trajectory_msg);
-            q_current_guess_ = joint_angles; // Update guess for next IK
+            q_current_guess_ = joint_angles; 
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "KinematicsSolver error: %s. Keeping previous joint guess. Target pose remains desired.", e.what());
             // If IK fails, current_ee_target_pose_ is the one we tried for,
@@ -224,19 +242,23 @@ private:
         return T_inc;
     }
 
-    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_; // Changed type
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_; 
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr keyboard_subscriber_;
     std::shared_ptr<KinematicsSolver> solver_;
     
-    cv::Matx44d M_home_; // Initial EE pose for q={0} (solver's M_initial)
-    cv::Matx44d initial_safe_pose_; // The first pose to achieve
-    cv::Matx44d current_ee_target_pose_; // Current desired EE pose based on commands
-    std::vector<double> q_current_guess_; // Last successful IK solution, used as next guess
+    cv::Matx44d M_home_; 
+    cv::Matx44d initial_safe_pose_; 
+    cv::Matx44d current_ee_target_pose_; 
+    std::vector<double> q_current_guess_; 
 
     double ik_tolerance_;
     int ik_max_iterations_;
     double delta_translation_;
     double delta_rotation_;
+    
+    // 新增成员变量
+    std::vector<std::pair<double, double>> joint_limits_; // 存储关节限位
+    double ik_lambda_;                                    // DLS的阻尼因子
 };
 
 int main(int argc, char * argv[])

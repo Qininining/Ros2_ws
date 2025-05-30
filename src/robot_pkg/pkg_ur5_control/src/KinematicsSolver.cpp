@@ -241,7 +241,10 @@ std::vector<double> KinematicsSolver::computeIK(
     const cv::Matx44d& T_target,
     const std::vector<double>& q_initial_guess,
     double tolerance,
-    int max_iterations)
+    int max_iterations,
+    const std::vector<std::pair<double, double>>& joint_limits, // 新增：关节限位
+    double lambda                                               // 新增：DLS阻尼因子
+)
 {
     auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
 
@@ -250,6 +253,12 @@ std::vector<double> KinematicsSolver::computeIK(
         throw InvalidInputException("IK initial joint guess count (" + std::to_string(q_initial_guess.size()) +
                                     ") does not match screw vector count (" + std::to_string(num_joints) + ").");
     }
+    // 检查关节限位参数的有效性
+    if (!joint_limits.empty() && joint_limits.size() != num_joints) {
+        throw InvalidInputException("IK joint_limits size (" + std::to_string(joint_limits.size()) +
+                                    ") does not match screw vector count (" + std::to_string(num_joints) + ").");
+    }
+
     if (num_joints == 0) {
         if (T_target == M_initial_) {
             auto end_time = std::chrono::high_resolution_clock::now();
@@ -273,6 +282,7 @@ std::vector<double> KinematicsSolver::computeIK(
     // std::cout << "Starting Inverse Kinematics (IK):" << std::endl;
     // std::cout << "  Target Tolerance: " << tolerance << std::endl;
     // std::cout << "  Max Iterations: " << max_iterations << std::endl;
+    // std::cout << "  Damping Factor (lambda): " << lambda << std::endl; // Log lambda
     // std::cout << "  Initial Joint Angles q_initial: [";
     // for (size_t i = 0; i < q.size(); ++i) {
     //     std::cout << q[i] << (i == q.size() - 1 ? "" : ", ");
@@ -313,13 +323,18 @@ std::vector<double> KinematicsSolver::computeIK(
         cv::Mat J_s = computeJacobianSpace(q); // Jacobian of ProductOfExponentials(q)
         
         cv::Mat delta_q_mat;
-        // Solve J_s * delta_q = V_s_error using pseudo-inverse
-        // OpenCV's solve with DECOMP_SVD computes pseudo-inverse if J_s is not square or singular
-        if (!cv::solve(J_s, cv::Mat(V_s_error), delta_q_mat, cv::DECOMP_SVD)) {
+        
+        // 使用Damped Least Squares (DLS)求解: (J_s^T * J_s + lambda^2 * I) * delta_q = J_s^T * V_s_error
+        double lambda_sq = lambda * lambda;
+        cv::Mat J_s_T = J_s.t();
+        cv::Mat A_dls = J_s_T * J_s + lambda_sq * cv::Mat::eye(static_cast<int>(num_joints), static_cast<int>(num_joints), CV_64F);
+        cv::Mat B_dls = J_s_T * cv::Mat(V_s_error);
+
+        if (!cv::solve(A_dls, B_dls, delta_q_mat, cv::DECOMP_SVD)) { // 或者 cv::DECOMP_CHOLESKY 如果 A_dls 总是对称正定
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-            std::cout << "IK Jacobian solve failed. Computation Time: " << duration.count() << " us" << std::endl;
-            throw ComputationFailedException("IK: Jacobian solve failed (cv::solve DECOMP_SVD).");
+            std::cout << "IK DLS Jacobian solve failed. Computation Time: " << duration.count() << " us" << std::endl;
+            throw ComputationFailedException("IK: DLS Jacobian solve failed (cv::solve).");
         }
         
         if (delta_q_mat.rows != static_cast<int>(num_joints) || delta_q_mat.cols != 1) {
@@ -335,6 +350,19 @@ std::vector<double> KinematicsSolver::computeIK(
             // std::cout << delta_q_mat.at<double>(static_cast<int>(i), 0) << (i == num_joints - 1 ? "" : ", ");
         }
         // std::cout << "]" << std::endl;
+
+        // 应用关节限位
+        if (!joint_limits.empty()) {
+            for (size_t i = 0; i < num_joints; ++i) {
+                if (q[i] < joint_limits[i].first) {
+                    q[i] = joint_limits[i].first;
+                    // std::cout << "    Joint " << i << " clamped to min: " << q[i] << std::endl;
+                } else if (q[i] > joint_limits[i].second) {
+                    q[i] = joint_limits[i].second;
+                    // std::cout << "    Joint " << i << " clamped to max: " << q[i] << std::endl;
+                }
+            }
+        }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
