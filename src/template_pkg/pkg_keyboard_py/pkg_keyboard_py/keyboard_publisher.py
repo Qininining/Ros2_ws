@@ -8,7 +8,7 @@ import threading
 
 class KeyboardPublisher(Node):
     def __init__(self):
-        super().__init__('keyboard_publisher')
+        super().__init__('keyboard_publisher_node')
         self.publisher_ = self.create_publisher(String, 'keyboard_input', 10)
         self.get_logger().info('Keyboard Publisher Node Started. Press keys to publish. Press Esc to exit.')
         
@@ -107,11 +107,16 @@ def main(args=None):
         keyboard_publisher.get_logger().info('Main loop exited. Cleaning up node...')
         keyboard_publisher._initiate_shutdown() # Gracefully stop listener thread and other activities
         
-        # Check if node is still valid before destroying (it might have been destroyed if shutdown was rapid)
-        if keyboard_publisher.context.is_valid() and keyboard_publisher.handle:
+        # Check if node is still valid before destroying
+        # The node's context should be ok and its public handle should not be None
+        if keyboard_publisher.context.ok() and keyboard_publisher.handle is not None:
+             keyboard_publisher.get_logger().debug('Destroying node...')
              keyboard_publisher.destroy_node()
+        else:
+            keyboard_publisher.get_logger().debug('Node already destroyed or context invalid.')
         
-        if rclpy.ok(): # Check if rclpy context is still valid
+        if rclpy.ok(): # Check if rclpy context is still valid globally
+            keyboard_publisher.get_logger().debug('Shutting down rclpy...')
             rclpy.shutdown()
         keyboard_publisher.get_logger().info('ROS 2 shutdown complete.')
 
