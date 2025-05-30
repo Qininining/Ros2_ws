@@ -27,7 +27,7 @@ ament_target_dependencies(
   ur5_joint_controller
   "rclcpp"
   "std_msgs"
-  # "ur5_control"
+  "trajectory_msgs"
 )
 
 install(TARGETS ur5_joint_controller
@@ -39,7 +39,6 @@ ament_target_dependencies(
   "rclcpp"
   "sensor_msgs"
   "std_msgs"
-  # "custom_interfaces"
 )
 
 install(TARGETS joint_state_subscriber
