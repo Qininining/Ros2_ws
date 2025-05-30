@@ -6,7 +6,7 @@ class UR5JointController : public rclcpp::Node
 public:
   UR5JointController() : Node("ur5_joint_controller")
   {
-    publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("ur5/joint_group_position_controller/commands", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/forward_position_controller/commands", 10);
     timer_ = this->create_wall_timer(
       std::chrono::seconds(1),
       std::bind(&UR5JointController::timer_callback, this)
