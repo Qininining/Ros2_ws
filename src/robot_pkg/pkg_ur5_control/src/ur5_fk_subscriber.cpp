@@ -25,7 +25,14 @@ public:
     : Node("ur5_fk_subscriber")
     {
         // UR5 的标准螺旋轴 
-        // 这些值应与您的机器人配置匹配
+        // Standard UR5 Kinematic Parameters (Lynch & Park Convention)
+        // H1 = 0.089159, L1 = 0.425, L2 = 0.39225, W1 = 0.10915, H2 = 0.09465, W2 = 0.0823
+
+        // Screw vectors S_i = [omega_x, omega_y, omega_z, v_x, v_y, v_z]^T
+        // Note: Original example had some omega components negated (e.g. omega_y = -1 for S2,S3,S4).
+        // The standard convention usually implies positive rotation for positive theta.
+        // The values below are from the standard set previously discussed.
+        
         // std::vector<cv::Vec6d> screw_axes = {
         //     {0.0, 0.0, 1.0, 0.0, 0.0, 0.0},                                      // S1
         //     {0.0, 1.0, 0.0, -0.089159, 0.0, 0.0},                                 // S2
