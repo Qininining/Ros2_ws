@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp"
 #include "std_msgs/msg/string.hpp" // For keyboard input
+#include "trajectory_msgs/msg/joint_trajectory.hpp"        // Added
+#include "trajectory_msgs/msg/joint_trajectory_point.hpp" // Added
 #include "KinematicsSolver.h" 
 #include <vector>
 #include <opencv2/opencv.hpp> 
@@ -42,12 +43,9 @@ public:
       delta_translation_(0.02), // 2cm for translational steps
       delta_rotation_(M_PI / 36.0) // 5 degrees for rotational steps
     {
-        // Declare and get parameters
-        this->declare_parameter<std::string>("joint_commands_topic", "ur5/joint_group_position_controller/commands");
-        std::string joint_commands_topic = this->get_parameter("joint_commands_topic").as_string();
-
-        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
-            joint_commands_topic, 10);
+        // Publisher for joint trajectory commands
+        publisher_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
+            "/scaled_joint_trajectory_controller/joint_trajectory", 10);
 
         
         // Standard UR5 Kinematic Parameters (Lynch & Park Convention, adapted for a specific URDF)
@@ -179,11 +177,28 @@ private:
             std::vector<double> joint_angles = solver_->computeIK(
                 target_pose, q_current_guess_, ik_tolerance_, ik_max_iterations_);
 
-            auto pub_msg = std_msgs::msg::Float64MultiArray();
-            pub_msg.data = joint_angles;
+            auto trajectory_msg = trajectory_msgs::msg::JointTrajectory();
+            trajectory_msg.joint_names = {
+                "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
+                "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"};
 
-            RCLCPP_INFO_STREAM(this->get_logger(), "IK solution found. Publishing joint positions: " << joint_angles);
-            publisher_->publish(pub_msg);
+            trajectory_msgs::msg::JointTrajectoryPoint point;
+            point.positions = joint_angles;
+            point.time_from_start.sec = 2; // As per request
+            point.time_from_start.nanosec = 0;
+            // Velocities, accelerations, and effort can be left empty if not used by the controller
+            // point.velocities.resize(joint_angles.size(), 0.0);
+            // point.accelerations.resize(joint_angles.size(), 0.0);
+            // point.effort.resize(joint_angles.size(), 0.0);
+
+
+            trajectory_msg.points.push_back(point);
+            // Add a header timestamp if needed by the receiving controller
+            // trajectory_msg.header.stamp = this->get_clock()->now(); 
+            // trajectory_msg.header.frame_id = ""; // Set if applicable
+
+            RCLCPP_INFO_STREAM(this->get_logger(), "IK solution found. Publishing joint trajectory: " << joint_angles);
+            publisher_->publish(trajectory_msg);
             q_current_guess_ = joint_angles; // Update guess for next IK
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "KinematicsSolver error: %s. Keeping previous joint guess. Target pose remains desired.", e.what());
@@ -209,7 +224,7 @@ private:
         return T_inc;
     }
 
-    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr publisher_;
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_; // Changed type
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr keyboard_subscriber_;
     std::shared_ptr<KinematicsSolver> solver_;
     

@@ -48,7 +48,7 @@ add_executable(velocity_command_publisher src/velocity_command_publisher.cpp)
 ament_target_dependencies(velocity_command_publisher rclcpp std_msgs)
 
 add_executable(ur5_kinematics_controller src/ur5_kinematics_controller.cpp src/KinematicsSolver.cpp)
-ament_target_dependencies(ur5_kinematics_controller rclcpp std_msgs)
+ament_target_dependencies(ur5_kinematics_controller rclcpp std_msgs trajectory_msgs)
 target_link_libraries(ur5_kinematics_controller ${OpenCV_LIBS})  # 链接OpenCV库
 
 add_executable(ur5_fk_subscriber_node src/ur5_fk_subscriber.cpp src/KinematicsSolver.cpp)
