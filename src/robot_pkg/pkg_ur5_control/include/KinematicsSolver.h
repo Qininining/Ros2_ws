@@ -81,7 +81,9 @@ public:
      */
     std::vector<double> computeJointVelocities(
         const cv::Vec6d& V_s_desired,
-        const std::vector<double>& q_current);
+        const std::vector<double>& q_current,
+        double lambda = 0.1 // 新增：DLS阻尼因子，默认值可以根据经验调整
+    );
 
 private:
     std::vector<cv::Vec6d> screw_vectors_space_; ///< 存储空间系下的螺旋向量
