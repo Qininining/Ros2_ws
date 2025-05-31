@@ -286,6 +286,7 @@ private:
                 velocity_msg.data = q_dot;
                 joint_velocity_publisher_->publish(velocity_msg);
                 RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：发布的 q_dot: " << q_dot);
+                RCLCPP_INFO(this->get_logger(), "控制循环：已发布关节速度指令。q_dot: %f", q_dot);
             } else {
                 RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                                       "控制循环：计算出的 q_dot 大小不正确 (%zu vs %zu)。发布零速度。", 
