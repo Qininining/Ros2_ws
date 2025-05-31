@@ -36,17 +36,33 @@ std::ostream& operator<<(std::ostream& os, const cv::Vec6d& vec) {
     return os;
 }
 
+// 新增：辅助函数：打印 std::vector<std::string> (可选, 用于调试)
+std::ostream& operator<<(std::ostream& os, const std::vector<std::string>& vec) {
+    os << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        os << "\"" << vec[i] << "\""; // 将字符串用引号括起来，以便更清晰地显示
+        if (i < vec.size() - 1) {
+            os << ", ";
+        }
+    }
+    os << "]";
+    return os;
+}
+
 
 class UR5VelocityController : public rclcpp::Node
 {
 public:
     UR5VelocityController()
     : Node("ur5_velocity_controller"),
-      delta_linear_velocity_(0.05), // m/s
-      delta_angular_velocity_(M_PI / 20.0), // rad/s (约 9 deg/s)
+      delta_linear_velocity_(0.005), // m/s
+      delta_angular_velocity_(M_PI / 180.0), // rad/s (约 1 deg/s)
       joint_states_received_(false),
       control_loop_rate_(50.0) // Hz, 控制循环频率
     {
+        // 设置日志级别为DEBUG以显示所有信息
+        this->get_logger().set_level(rclcpp::Logger::Level::Debug);
+
         // 1. 初始化运动学求解器 (旋量轴, M_home_)
         M_home_ = cv::Matx44d(
             -0.999999787643124, -9.76765308370577e-06,  0.000651627424651037,  0.817145243199844,
