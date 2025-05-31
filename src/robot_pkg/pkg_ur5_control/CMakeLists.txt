@@ -55,10 +55,23 @@ add_executable(ur5_fk_subscriber_node src/ur5_fk_subscriber.cpp src/KinematicsSo
 ament_target_dependencies(ur5_fk_subscriber_node rclcpp sensor_msgs) # 假设KinematicsSolver在pkg_ur5_control_lib中
 target_link_libraries(ur5_fk_subscriber_node ${OpenCV_LIBS})  # 链接OpenCV库
 
+
+add_executable(ur5_velocity_controller src/ur5_velocity_controller.cpp src/KinematicsSolver.cpp)
+ament_target_dependencies(ur5_velocity_controller
+  rclcpp
+  std_msgs
+  sensor_msgs
+  # OpenCV is linked via target_link_libraries
+)
+target_link_libraries(ur5_velocity_controller ${OpenCV_LIBS})
+
+
+
 install(TARGETS
   velocity_command_publisher
   ur5_kinematics_controller
   ur5_fk_subscriber_node # 添加新的节点
+  ur5_velocity_controller
   DESTINATION lib/${PROJECT_NAME}
 )
 
