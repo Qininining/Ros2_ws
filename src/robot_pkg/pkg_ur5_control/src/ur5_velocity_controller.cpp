@@ -16,7 +16,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// 辅助函数：打印 std::vector<double> (可选, 用于调试)
+// 辅助函数: 打印 std::vector<double> (可选, 用于调试)
 std::ostream& operator<<(std::ostream& os, const std::vector<double>& vec) {
     os << "[";
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -26,7 +26,7 @@ std::ostream& operator<<(std::ostream& os, const std::vector<double>& vec) {
     return os;
 }
 
-// 辅助函数：打印 cv::Vec6d (可选, 用于调试)
+// 辅助函数: 打印 cv::Vec6d (可选, 用于调试)
 std::ostream& operator<<(std::ostream& os, const cv::Vec6d& vec) {
     os << "[" << std::fixed << std::setprecision(3) << vec(0);
     for (int i = 1; i < 6; ++i) {
@@ -36,7 +36,7 @@ std::ostream& operator<<(std::ostream& os, const cv::Vec6d& vec) {
     return os;
 }
 
-// 新增：辅助函数：打印 std::vector<std::string> (可选, 用于调试)
+// 新增: 辅助函数: 打印 std::vector<std::string> (可选, 用于调试)
 std::ostream& operator<<(std::ostream& os, const std::vector<std::string>& vec) {
     os << "[";
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -155,7 +155,7 @@ private:
         if (!new_positions_valid) {
             if (msg->position.size() == num_expected_joints_) {
                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                                     "使用来自JointState消息的直接关节顺序。原因：名称映射失败，名称不可用，或名称不存在但位置计数 (%zu) 与预期 (%zu) 匹配。",
+                                     "使用来自JointState消息的直接关节顺序。原因: 名称映射失败，名称不可用，或名称不存在但位置计数 (%zu) 与预期 (%zu) 匹配。",
                                      msg->position.size(), num_expected_joints_);
                 for (size_t i = 0; i < num_expected_joints_; ++i) {
                     new_positions[i] = msg->position[i];
@@ -198,7 +198,7 @@ private:
             return;
         }
         if (q_current_.size() != num_expected_joints_) { 
-            RCLCPP_ERROR(this->get_logger(), "键盘输入：q_current_ 大小无效 (%zu vs %zu)。忽略指令并将目标速度设为零。", q_current_.size(), num_expected_joints_);
+            RCLCPP_ERROR(this->get_logger(), "键盘输入: q_current_ 大小无效 (%zu vs %zu)。忽略指令并将目标速度设为零。", q_current_.size(), num_expected_joints_);
             V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 安全措施
             return;
         }
@@ -249,13 +249,13 @@ private:
     {
         if (!joint_states_received_) {
             // 如果从未收到关节状态，则不执行任何操作，V_s_last_commanded_ 初始为零，机器人静止
-            RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "控制循环：等待有效的关节状态。");
+            RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "控制循环: 等待有效的关节状态。");
             return;
         }
         
         if (q_current_.size() != num_expected_joints_) {
              RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                                  "控制循环：q_current_ 大小无效 (%zu vs %zu)。发布零速度。", q_current_.size(), num_expected_joints_);
+                                  "控制循环: q_current_ 大小无效 (%zu vs %zu)。发布零速度。", q_current_.size(), num_expected_joints_);
              V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 安全措施
              publish_zero_velocities();
              return;
@@ -272,38 +272,38 @@ private:
         if (is_stopped) {
             // 如果目标速度为零 (例如，按下 'x' 或初始状态)，则发布零关节速度
             publish_zero_velocities();
-            RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "控制循环：V_s_last_commanded 为零。发布零关节速度。");
+            RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "控制循环: V_s_last_commanded 为零。发布零关节速度。");
             return;
         }
 
-        RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：目标 V_s: " << V_s_last_commanded_ << ", 当前 q: " << q_current_);
+        RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: 目标 V_s: " << V_s_last_commanded_ << ", 当前 q: " << q_current_);
 
         try {
-            std::vector<double> q_dot = solver_->computeJointVelocities(V_s_last_commanded_, q_current_);
+            std::vector<double> q_dot = solver_->computeJointVelocities(V_s_last_commanded_, q_current_, 0);
             
             if (q_dot.size() == num_expected_joints_) {
                 auto velocity_msg = std_msgs::msg::Float64MultiArray();
                 velocity_msg.data = q_dot;
                 joint_velocity_publisher_->publish(velocity_msg);
-                RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：发布的 q_dot: " << q_dot);
-                RCLCPP_INFO(this->get_logger(), "控制循环：已发布关节速度指令。q_dot: %f", q_dot);
+                RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: 发布的 q_dot: " << q_dot);
+                RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: 已发布关节速度指令。q_dot: " << q_dot);
             } else {
                 RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                                      "控制循环：计算出的 q_dot 大小不正确 (%zu vs %zu)。发布零速度。", 
+                                      "控制循环: 计算出的 q_dot 大小不正确 (%zu vs %zu)。发布零速度。", 
                                       q_dot.size(), num_expected_joints_);
                 V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 安全措施
                 publish_zero_velocities();
             }
         } catch (const InvalidInputException& e) { 
-            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：KinematicsSolver 输入无效: %s。停止机器人。", e.what());
+            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: KinematicsSolver 输入无效: %s。停止机器人。", e.what());
             V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 发生错误时停止
             publish_zero_velocities();
         } catch (const ComputationFailedException& e) { 
-            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：KinematicsSolver 计算失败: %s。停止机器人。", e.what());
+            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: KinematicsSolver 计算失败: %s。停止机器人。", e.what());
             V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 发生错误时停止
             publish_zero_velocities();
         } catch (const std::exception& e) {
-            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环：标准异常: %s。停止机器人。", e.what());
+            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: 标准异常: %s。停止机器人。", e.what());
             V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 发生错误时停止
             publish_zero_velocities();
         }
