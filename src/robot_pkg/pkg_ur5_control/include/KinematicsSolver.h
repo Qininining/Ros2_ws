@@ -66,7 +66,7 @@ public:
         const std::vector<double>& q_initial_guess,
         double tolerance = 1e-6,
         int max_iterations = 100,
-        const std::vector<std::pair<double, double>>& joint_limits, // Added
+        const std::vector<std::pair<double, double>>& joint_limits = {}, // Added default value
         double lambda = 0.1                                        // Added with default
     );
 
@@ -121,7 +121,7 @@ private:
 
     /**
      * @brief 计算齐次变换矩阵的矩阵对数，得到对应的空间旋量。
-     * @param T 4x4 齐次变换矩阵。
+     * @param T 4x4 齊次變換矩陣。
      * @return 6D 空间旋量向量 (omega_x, omega_y, omega_z, v_x, v_y, v_z)。
      * @throws ComputationFailedException 如果无法计算矩阵对数。
      */
@@ -129,7 +129,7 @@ private:
 
     /**
      * @brief 计算变换矩阵的伴随表示。
-     * @param T 4x4 齐次变换矩阵。
+     * @param T 4x4 齊次變換矩陣。
      * @return 6x6 伴随矩阵。
      */
     cv::Matx66d adjoint(const cv::Matx44d& T);

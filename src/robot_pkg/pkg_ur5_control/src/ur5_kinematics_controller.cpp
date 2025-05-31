@@ -9,6 +9,13 @@
 #include <cmath> // For M_PI, std::cos, std::sin
 #include <utility> // For std::pair, if not already included via other headers
 
+// 定义pi
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define pi M_PI
+
 // Helper function to print cv::Matx44d (optional, for debugging)
 std::ostream& operator<<(std::ostream& os, const cv::Matx44d& mat) {
     os << std::fixed << std::setprecision(4);
