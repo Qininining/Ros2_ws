@@ -221,8 +221,8 @@ cv::Mat KinematicsSolver::computeJacobianSpace(const std::vector<double>& q) {
             // cv::Matx<double, 6, 1> S_i_base_mat;
             // for(int k=0; k<6; ++k) S_i_base_mat(k,0) = S_i_base(k);
             // cv::Matx<double, 6, 1> J_col_i_mat = Adj_T_prod * S_i_base_mat;
-            // for(int k=0; k<6; ++k) J_col_i_vec(k) = J_col_i_mat(k,0);
             cv::Matx<double, 6, 1> J_col_i_mat = Adj_T_prod * cv::Matx<double, 6, 1>(S_i_base.val);
+            for(int k=0; k<6; ++k) J_col_i_vec(k) = J_col_i_mat(k,0);
         }
 
         for (int row = 0; row < 6; ++row) {

@@ -4,6 +4,7 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <iomanip> // 用于 std::fixed 和 std::setprecision
+#include <map> // 新增：用于 std::map
 
 // 用于打印 cv::Matx44d 的辅助函数 (可选, 用于调试)
 std::ostream& operator<<(std::ostream& os, const cv::Matx44d& mat) {
@@ -98,36 +99,31 @@ private:
         std::vector<double> q_current;
         q_current.reserve(num_expected_joints);
 
-        // 检查 joint_states 消息是否包含有效的关节名称和位置数据
-        if (!msg->name.empty() && msg->name.size() == msg->position.size()) {
-            // 基于名称映射关节值
+        // --- Extract Joint Positions (q_current) ---
+        bool names_available_for_pos = !msg->name.empty() && msg->name.size() == msg->position.size();
+
+        if (names_available_for_pos) {
             std::map<std::string, double> joint_positions_map;
             for (size_t i = 0; i < msg->name.size(); ++i) {
                 joint_positions_map[msg->name[i]] = msg->position[i];
             }
-
-            bool all_joints_found = true;
             for (const auto& expected_name : expected_joint_names) {
                 auto it = joint_positions_map.find(expected_name);
                 if (it != joint_positions_map.end()) {
                     q_current.push_back(it->second);
                 } else {
-                    RCLCPP_ERROR(this->get_logger(), "Expected joint '%s' not found in received JointState message. Cannot compute FK.", expected_name.c_str());
-                    all_joints_found = false;
-                    break; // 如果关键关节缺失，则停止处理
+                    RCLCPP_ERROR(this->get_logger(), "Expected joint '%s' for position not found in named JointState. Cannot compute FK.", expected_name.c_str());
+                    return;
                 }
             }
-
-            if (!all_joints_found) {
-                return; // 如果并非所有预期的关节都已找到，则不继续
-            }
         } else {
-            // 如果没有名称或名称与位置数量不匹配，则记录警告并按顺序使用位置
-            RCLCPP_WARN(this->get_logger(),
-                        "Joint names are not available, or name/position array sizes mismatch in JointState message (names: %zu, positions: %zu). "
-                        "Assuming joint positions are in the expected order: "
-                        "shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3.",
-                        msg->name.size(), msg->position.size());
+            if (!msg->name.empty() && msg->name.size() != msg->position.size()) {
+                 RCLCPP_WARN(this->get_logger(),
+                            "JointState: Name array size (%zu) does not match position array size (%zu). Assuming positions are in order.",
+                            msg->name.size(), msg->position.size());
+            } else if (msg->name.empty()){
+                 RCLCPP_WARN(this->get_logger(), "JointState: Names not available. Assuming joint positions are in the expected order.");
+            }
 
             if (msg->position.size() >= num_expected_joints) {
                 for (size_t i = 0; i < num_expected_joints; ++i) {
@@ -135,17 +131,74 @@ private:
                 }
             } else {
                 RCLCPP_ERROR(this->get_logger(),
-                             "Insufficient joint positions (%zu) to match expected %zu joints when names are missing/mismatched. Cannot compute FK.",
+                             "Insufficient joint positions (%zu) to match expected %zu joints (when names are missing/mismatched). Cannot compute FK.",
                              msg->position.size(), num_expected_joints);
                 return;
             }
         }
 
-        // 再次确认我们有正确数量的关节角度
         if (q_current.size() != num_expected_joints) {
-             RCLCPP_ERROR(this->get_logger(), "Could not form a %zu-element joint vector (formed %zu). Aborting FK.",
+             RCLCPP_ERROR(this->get_logger(), "Could not form a %zu-element joint angle vector (formed %zu). Aborting FK.",
                           num_expected_joints, q_current.size());
              return;
+        }
+
+        // --- Extract Joint Velocities (q_dot_current) ---
+        std::vector<double> q_dot_current;
+        bool velocities_available = false;
+
+        if (msg->velocity.empty()) {
+            RCLCPP_DEBUG(this->get_logger(), "Velocity data not present in JointState message. Skipping end-effector velocity calculation.");
+        } else {
+            q_dot_current.reserve(num_expected_joints);
+            // Prefer using names for velocities if names were available for positions AND velocity array matches name array size
+            bool use_names_for_vel = names_available_for_pos && (msg->name.size() == msg->velocity.size());
+
+            if (use_names_for_vel) {
+                std::map<std::string, double> joint_velocities_map;
+                for (size_t i = 0; i < msg->name.size(); ++i) { // Using msg->name.size() as it matches msg->velocity.size() here
+                    joint_velocities_map[msg->name[i]] = msg->velocity[i];
+                }
+                for (const auto& expected_name : expected_joint_names) {
+                    auto it = joint_velocities_map.find(expected_name);
+                    if (it != joint_velocities_map.end()) {
+                        q_dot_current.push_back(it->second);
+                    } else {
+                        RCLCPP_WARN(this->get_logger(), "Expected joint '%s' for velocity not found in named JointState. Skipping end-effector velocity.", expected_name.c_str());
+                        q_dot_current.clear(); // Invalidate
+                        break;
+                    }
+                }
+                if (q_dot_current.size() == num_expected_joints) {
+                    velocities_available = true;
+                }
+            } else { // Names not used for velocities (either not available for pos, or vel array size mismatch, or names empty)
+                if (!msg->name.empty() && msg->name.size() != msg->velocity.size()) {
+                     RCLCPP_WARN(this->get_logger(),
+                                "JointState: Name array size (%zu) does not match velocity array size (%zu). Assuming velocities are in order if sufficient.",
+                                msg->name.size(), msg->velocity.size());
+                } else if (msg->name.empty()){ // This implies names_available_for_pos was false
+                     RCLCPP_INFO(this->get_logger(), "JointState: Names not available. Assuming joint velocities are in the expected order if sufficient.");
+                }
+                // If names_available_for_pos was true, but msg->name.size() != msg->velocity.size(), the warning above is printed.
+                // Now, try to use ordered velocities.
+                if (msg->velocity.size() >= num_expected_joints) {
+                    for (size_t i = 0; i < num_expected_joints; ++i) {
+                        q_dot_current.push_back(msg->velocity[i]);
+                    }
+                    velocities_available = true;
+                } else {
+                    RCLCPP_WARN(this->get_logger(),
+                                 "Insufficient joint velocities (%zu) to match expected %zu joints for ordered data. Skipping end-effector velocity.",
+                                 msg->velocity.size(), num_expected_joints);
+                }
+            }
+        }
+        
+        // Final check on extracted velocities
+        if (velocities_available && q_dot_current.size() != num_expected_joints) {
+            RCLCPP_WARN(this->get_logger(), "Formed joint velocity vector size (%zu) is incorrect after extraction. Skipping end-effector velocity.", q_dot_current.size());
+            velocities_available = false;
         }
 
         try {
@@ -155,8 +208,25 @@ private:
                 << q_current[0] << ", " << q_current[1] << ", " << q_current[2] << ", "
                 << q_current[3] << ", " << q_current[4] << ", " << q_current[5] << "]");
             RCLCPP_INFO_STREAM(this->get_logger(), "Calculated End-Effector Pose (FK):\n" << current_pose);
+
+            if (velocities_available) {
+                cv::Vec6d current_ee_velocity = solver_->computeEndEffectorVelocity(q_current, q_dot_current);
+                RCLCPP_INFO_STREAM(this->get_logger(), "Current Joint Velocities (q_dot): ["
+                    << std::fixed << std::setprecision(3)
+                    << q_dot_current[0] << ", " << q_dot_current[1] << ", " << q_dot_current[2] << ", "
+                    << q_dot_current[3] << ", " << q_dot_current[4] << ", " << q_dot_current[5] << "]");
+                RCLCPP_INFO_STREAM(this->get_logger(), "Calculated End-Effector Velocity (Space Frame V_s):\n"
+                    << "  Angular (omega_x,y,z): [" << std::fixed << std::setprecision(4) << current_ee_velocity(0) << ", " << current_ee_velocity(1) << ", " << current_ee_velocity(2) << "]\n"
+                    << "  Linear  (v_x,y,z)    : [" << std::fixed << std::setprecision(4) << current_ee_velocity(3) << ", " << current_ee_velocity(4) << ", " << current_ee_velocity(5) << "]");
+            } else {
+                // Log if velocities were present but not usable for some reason (already logged if empty)
+                if (!msg->velocity.empty()) { 
+                     RCLCPP_INFO(this->get_logger(), "End-effector velocity not computed as joint velocity data was incomplete, inconsistent, or names mismatched.");
+                }
+            }
+
         } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "KinematicsSolver FK error: %s", e.what());
+            RCLCPP_ERROR(this->get_logger(), "KinematicsSolver error during FK or Velocity calculation: %s", e.what());
         }
     }
 
