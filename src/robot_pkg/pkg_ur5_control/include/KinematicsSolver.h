@@ -85,6 +85,20 @@ public:
         double lambda = 0.1 // 新增：DLS阻尼因子，默认值可以根据经验调整
     );
 
+    /**
+     * @brief 计算末端执行器的空间速度。
+     *        V_s = J_s(q) * q_dot
+     * @param q_current 当前的关节角度向量。
+     * @param q_dot 当前的关节速度向量。
+     * @return 末端执行器的 6D 空间速度 (omega_x, omega_y, omega_z, v_x, v_y, v_z)。
+     * @throws InvalidInputException 如果 q_current 或 q_dot 的大小与螺旋向量数量不匹配。
+     * @throws ComputationFailedException 如果发生计算错误。
+     */
+    cv::Vec6d computeEndEffectorVelocity(
+        const std::vector<double>& q_current,
+        const std::vector<double>& q_dot
+    );
+
 private:
     std::vector<cv::Vec6d> screw_vectors_space_; ///< 存储空间系下的螺旋向量
     cv::Matx44d M_initial_;                     ///< 初始位姿矩阵

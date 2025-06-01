@@ -218,11 +218,11 @@ cv::Mat KinematicsSolver::computeJacobianSpace(const std::vector<double>& q) {
             // T_product_upto_prev is already exp(S1 q1)...exp(S(i-1)q(i-1))
             cv::Matx66d Adj_T_prod = adjoint(T_product_upto_prev);
             
-            cv::Matx<double, 6, 1> S_i_base_mat;
-            for(int k=0; k<6; ++k) S_i_base_mat(k,0) = S_i_base(k);
-            
-            cv::Matx<double, 6, 1> J_col_i_mat = Adj_T_prod * S_i_base_mat;
-            for(int k=0; k<6; ++k) J_col_i_vec(k) = J_col_i_mat(k,0);
+            // cv::Matx<double, 6, 1> S_i_base_mat;
+            // for(int k=0; k<6; ++k) S_i_base_mat(k,0) = S_i_base(k);
+            // cv::Matx<double, 6, 1> J_col_i_mat = Adj_T_prod * S_i_base_mat;
+            // for(int k=0; k<6; ++k) J_col_i_vec(k) = J_col_i_mat(k,0);
+            cv::Matx<double, 6, 1> J_col_i_mat = Adj_T_prod * cv::Matx<double, 6, 1>(S_i_base.val);
         }
 
         for (int row = 0; row < 6; ++row) {
@@ -461,5 +461,62 @@ std::vector<double> KinematicsSolver::computeJointVelocities(
             throw;
         }
         throw ComputationFailedException("在 computeJointVelocities 中发生标准库错误: " + std::string(std_e.what()));
+    }
+}
+
+cv::Vec6d KinematicsSolver::computeEndEffectorVelocity(
+    const std::vector<double>& q_current,
+    const std::vector<double>& q_dot
+) {
+    size_t num_joints = screw_vectors_space_.size();
+    if (q_current.size() != num_joints) {
+        throw InvalidInputException("computeEndEffectorVelocity 中当前关节角数量 (" + std::to_string(q_current.size()) +
+                                    ") 与螺旋向量数量 (" + std::to_string(num_joints) + ") 不匹配。");
+    }
+    if (q_dot.size() != num_joints) {
+        throw InvalidInputException("computeEndEffectorVelocity 中关节速度数量 (" + std::to_string(q_dot.size()) +
+                                    ") 与螺旋向量数量 (" + std::to_string(num_joints) + ") 不匹配。");
+    }
+
+    if (num_joints == 0) {
+        // 没有关节，末端执行器速度始终为零
+        return cv::Vec6d(0,0,0,0,0,0);
+    }
+
+    try {
+        cv::Mat J_s = computeJacobianSpace(q_current); // 6xN
+        
+        // cv::Mat q_dot_mat(static_cast<int>(num_joints), 1, CV_64F);
+        // for (size_t i = 0; i < num_joints; ++i) {
+        //     q_dot_mat.at<double>(static_cast<int>(i), 0) = q_dot[i];
+        // }
+        cv::Mat q_dot_mat = cv::Mat(q_dot).clone();
+
+        cv::Mat V_s_mat = J_s * q_dot_mat; // (6xN) * (Nx1) = 6x1
+
+        if (V_s_mat.rows != 6 || V_s_mat.cols != 1) {
+            throw ComputationFailedException("computeEndEffectorVelocity: 计算得到的 V_s 维度错误。期望 6x1, 得到 " +
+                                             std::to_string(V_s_mat.rows) + "x" + std::to_string(V_s_mat.cols));
+        }
+
+        cv::Vec6d V_s_result;
+        // for (int i = 0; i < 6; ++i) {
+        //     V_s_result(i) = V_s_mat.at<double>(i, 0);
+        // }
+        V_s_mat.col(0).reshape(1, 6).copyTo(V_s_result); // 确保是 6x1 向量
+        
+        return V_s_result;
+
+    } catch (const InvalidInputException& e) {
+        // computeJacobianSpace 可能抛出 InvalidInputException
+        throw; 
+    } catch (const cv::Exception& cv_e) {
+        throw ComputationFailedException("在 computeEndEffectorVelocity 中发生 OpenCV 错误: " + std::string(cv_e.what()));
+    } catch (const std::exception& std_e) {
+        // 捕获可能由 computeJacobianSpace 抛出的 ComputationFailedException
+        if (dynamic_cast<const ComputationFailedException*>(&std_e) || dynamic_cast<const InvalidInputException*>(&std_e)) {
+            throw;
+        }
+        throw ComputationFailedException("在 computeEndEffectorVelocity 中发生标准库错误: " + std::string(std_e.what()));
     }
 }
