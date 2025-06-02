@@ -25,6 +25,15 @@ public:
     ComputationFailedException(const std::string& message) : std::runtime_error(message) {}
 };
 
+class SingularityException : public ComputationFailedException {
+public:
+/**
+ * @brief 表示在运动学计算中遇到奇异构型的异常。
+ *        通常在雅可比矩阵接近奇异时抛出。
+ */
+    SingularityException(const std::string& message) : ComputationFailedException(message) {}
+};
+
 /**
  * @class KinematicsSolver
  * @brief 用于机械臂运动学求解的类，支持正向运动学计算。
@@ -98,6 +107,28 @@ public:
         const std::vector<double>& q_current,
         const std::vector<double>& q_dot
     );
+
+    /**
+     * @brief 检查机器人在给定关节角度下是否处于奇异构型。
+     *        如果空间雅可比矩阵 J_s(q) 的最小奇异值接近于零，则认为构型是奇异的。
+     *        此版本会内部计算雅可比矩阵。
+     * @param q_current 当前关节角度的向量。
+     * @param threshold 阈值，当最小奇异值低于此阈值时表示奇异。默认为 1e-6。
+     * @return 如果构型是奇异的，则返回 true，否则返回 false。
+     * @throws InvalidInputException 如果 q_current 的大小不正确。
+     * @throws ComputationFailedException 如果雅可比矩阵计算或 SVD 分解失败。
+     */
+    bool isSingular(const std::vector<double>& q_current, double threshold = 1e-6);
+
+    /**
+     * @brief 检查给定的雅可比矩阵是否表示奇异构型。
+     *        如果雅可比矩阵 J_s 的最小奇异值接近于零，则认为构型是奇异的。
+     * @param J_s 预先计算的空间雅可比矩阵。
+     * @param threshold 阈值，当最小奇异值低于此阈值时表示奇异。默认为 1e-6。
+     * @return 如果构型是奇异的，则返回 true，否则返回 false。
+     * @throws ComputationFailedException 如果 SVD 分解失败或雅可比矩阵为空。
+     */
+    bool isSingular(const cv::Mat& J_s, double threshold = 1e-6);
 
 private:
     std::vector<cv::Vec6d> screw_vectors_space_; ///< 存储空间系下的螺旋向量

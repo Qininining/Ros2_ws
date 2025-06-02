@@ -236,6 +236,90 @@ cv::Mat KinematicsSolver::computeJacobianSpace(const std::vector<double>& q) {
     return J_s;
 }
 
+// 版本1: 根据关节角计算雅可比矩阵并检查奇异性
+bool KinematicsSolver::isSingular(const std::vector<double>& q_current, double threshold) {
+    size_t num_joints = screw_vectors_space_.size();
+
+    if (q_current.size() != num_joints) {
+        throw InvalidInputException("isSingular (from q_current): q_current size (" + std::to_string(q_current.size()) +
+                                    ") does not match screw vector count (" + std::to_string(num_joints) + ").");
+    }
+
+    if (num_joints == 0) {
+        return false; // 没有关节，定义为非奇异
+    }
+
+    try {
+        // computeJacobianSpace 可能会抛出 InvalidInputException 或 ComputationFailedException
+        cv::Mat J_s = computeJacobianSpace(q_current);
+        // 调用新的重载函数进行实际的奇异性检查
+        return this->isSingular(J_s, threshold); 
+    } catch (const InvalidInputException& e) {
+        // 从 computeJacobianSpace 抛出的异常
+        throw;
+    } catch (const ComputationFailedException& e) {
+        // 从 computeJacobianSpace 或重载的 isSingular 抛出的异常
+        throw;
+    }
+    // 其他异常由调用者处理或在此处转换为 ComputationFailedException
+    // 为了简洁，假设 computeJacobianSpace 和 isSingular(J_s, threshold) 会处理其内部的 cv::Exception
+}
+
+// 版本2: 根据预计算的雅可比矩阵检查奇异性
+bool KinematicsSolver::isSingular(const cv::Mat& J_s, double threshold) {
+    if (J_s.empty()) {
+        throw ComputationFailedException("isSingular (from J_s): Jacobian matrix J_s is empty.");
+    }
+    // 假设 J_s 的列数代表关节数
+    // int num_joints_from_jacobian = J_s.cols;
+    // if (num_joints_from_jacobian == 0 && J_s.rows == 6) { // 6x0 雅可比
+    //     return false; // 没有关节，定义为非奇异
+    // }
+    // 如果 screw_vectors_space_ 为空，num_joints 会是0，此时 J_s 应该是 6x0
+    // 如果 screw_vectors_space_ 不为空，但 J_s.cols 是0，这是一个不一致的状态
+    if (screw_vectors_space_.empty() && J_s.cols == 0 && J_s.rows == 6) {
+        return false; // 对应无关节情况
+    }
+    if (!screw_vectors_space_.empty() && J_s.cols == 0) {
+        throw ComputationFailedException("isSingular (from J_s): Jacobian matrix J_s has 0 columns for a robot with joints.");
+    }
+     if (J_s.rows != 6) {
+        throw ComputationFailedException("isSingular (from J_s): Jacobian matrix J_s must have 6 rows. Got " + std::to_string(J_s.rows));
+    }
+
+
+    try {
+        cv::Mat w; // 用于存储奇异值
+        // J_s 是 6xN。w 将是 min(6,N)x1，包含降序排列的奇异值。
+        cv::SVD::compute(J_s, w);
+
+        if (w.empty() || w.rows == 0) {
+             // 对于有关节的机器人（J_s.cols > 0），SVD 不应返回空奇异值
+            if (J_s.cols > 0) {
+                throw ComputationFailedException("isSingular (from J_s): SVD computation resulted in no singular values for a Jacobian with " +
+                                                 std::to_string(J_s.cols) + " columns.");
+            }
+            // 如果 J_s.cols == 0 (例如 6x0 矩阵)，SVD 行为可能依赖于 OpenCV 版本，
+            // 但我们已在前面处理了 num_joints == 0 的情况。
+            // 为安全起见，如果 w 为空且 J_s.cols > 0，则抛出异常。
+            // 如果 J_s.cols == 0，我们应该已经返回 false。
+            // 此处主要处理 J_s.cols > 0 但 SVD 结果异常的情况。
+             return false; // 如果 J_s.cols == 0, 且由于某种原因到达这里，则认为非奇异
+        }
+
+        // 奇异值按降序存储在 w 中。
+        // 最小的奇异值是最后一个。
+        double min_singular_value = w.at<double>(w.rows - 1, 0);
+
+        return min_singular_value < threshold;
+
+    } catch (const cv::Exception& cv_e) {
+        // 捕获来自 SVD 的 OpenCV 异常
+        throw ComputationFailedException("isSingular (from J_s): OpenCV error during SVD: " + std::string(cv_e.what()));
+    }
+    // 其他 std::exception 不应在此处发生，除非是内存分配等问题
+}
+
 // 逆运动学计算
 std::vector<double> KinematicsSolver::computeIK(
     const cv::Matx44d& T_target,
@@ -260,7 +344,7 @@ std::vector<double> KinematicsSolver::computeIK(
     }
 
     if (num_joints == 0) {
-        if (T_target == M_initial_) {
+        if (cv::norm(T_target - M_initial_, cv::NORM_INF) < 1e-9) { // 比较矩阵是否近似相等
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
             std::cout << "IK: No joints, target matches initial pose. Computation Time: " << duration.count() << " us" << std::endl;
@@ -321,6 +405,24 @@ std::vector<double> KinematicsSolver::computeIK(
         }
 
         cv::Mat J_s = computeJacobianSpace(q); // Jacobian of ProductOfExponentials(q)
+        
+        // 使用已计算的 J_s 检查奇异性
+        // 默认阈值将从 isSingular(const cv::Mat&, double) 的声明中获取
+        if (this->isSingular(J_s)) { 
+            std::string q_str = "[";
+            if (!q.empty()) {
+                for (size_t i = 0; i < q.size(); ++i) {
+                    q_str += std::to_string(q[i]);
+                    if (i < q.size() - 1) {
+                        q_str += ", ";
+                    }
+                }
+            }
+            q_str += "]";
+            throw SingularityException("IK failed at iteration " + std::to_string(iter + 1) +
+                                       " due to singularity. Current joint configuration q: " + q_str +
+                                       ". Jacobian is singular or ill-conditioned.");
+        }
         
         cv::Mat delta_q_mat;
         
@@ -504,7 +606,7 @@ cv::Vec6d KinematicsSolver::computeEndEffectorVelocity(
         //     V_s_result(i) = V_s_mat.at<double>(i, 0);
         // }
         V_s_mat.col(0).reshape(1, 6).copyTo(V_s_result); // 确保是 6x1 向量
-        
+
         return V_s_result;
 
     } catch (const InvalidInputException& e) {
