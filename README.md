@@ -46,7 +46,15 @@ joint_topic: /joint_states
 status_topic: ~/status # Publish status to this topic
 command_out_topic: /forward_position_controller/commands # Publish outgoing commands here
 ```
-**注意**: 如果计划直接通过 Twist 指令控制末端执行器，并且 `forward_position_controller` 不直接支持（或需要更专门化的行为），则可能需要查阅 `twist_controller` 的相关文档或进行额外配置。
+**注意**: 更换/forward_position_controller/commands与 `/forward_velocity_controller/commands` 的同时，需要更换：
+```yaml
+# 内容节选自 ur_moveit_config/config/ur_servo.yaml
+# What to publish? Can save some bandwidth as most robots only require positions or velocities
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+```
+保证其一致性。
 
 ### 6. 启动 Servo Node 服务
 ```bash
@@ -99,4 +107,7 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5 robot_ip:=169.254.
         *   **初步解决方案**: 后续加入解析解求解，并选取最优解作为逆解初值，以实现稳定控制。
     *   **问题**: 有奇异检测，但缺乏相应处理措施。
         *   **改进方向**: 增加奇异值处理、关节限制、碰撞检测等措施。
+3.  **`moveit_servo`** (末端执行器控制):
+    *   **问题**: `forward_position_controller` 控制过程中会有速度的突变，导致机械臂抖动（在速度较快时出现）。
+    *   **问题**: `forward_velocity_controller` 控制模式下不好用，还需熟练熟练再制定操作方案。
 
