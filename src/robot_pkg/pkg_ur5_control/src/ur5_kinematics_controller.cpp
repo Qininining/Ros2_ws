@@ -108,9 +108,9 @@ public:
         // 关节限位
         joint_limits_ = {
             {-2*pi, 2*pi},  // shoulder_pan_joint
-            {-2*pi, 2*pi},  // shoulder_lift_joint (实际可能不对称或更小)
+            {-1*pi, 0},  // shoulder_lift_joint (实际可能不对称或更小)
             {-pi, pi},      // elbow_joint (通常是 +/- PI 或类似)
-            {-2*pi, 2*pi},  // wrist_1_joint
+            {-1.5*pi, 0.5*pi},  // wrist_1_joint
             {-2*pi, 2*pi},  // wrist_2_joint
             {-2*pi, 2*pi}   // wrist_3_joint
         };
