@@ -101,18 +101,18 @@ public:
         joint_state_subscriber_ = this->create_subscription<sensor_msgs::msg::JointState>(
             "/joint_states", rclcpp::SensorDataQoS(),
             std::bind(&UR5VelocityController::joint_state_callback, this, std::placeholders::_1));
-        
+
+        // 5. 创建控制循环定时器
+        control_timer_ = this->create_wall_timer(
+            std::chrono::duration<double>(1.0 / control_loop_rate_),
+            std::bind(&UR5VelocityController::control_loop_callback, this));
+
         expected_joint_names_ = {
             "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
             "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"
         };
         num_expected_joints_ = expected_joint_names_.size();
         q_current_.resize(num_expected_joints_, 0.0);
-
-        // 5. 创建控制循环定时器
-        control_timer_ = this->create_wall_timer(
-            std::chrono::duration<double>(1.0 / control_loop_rate_),
-            std::bind(&UR5VelocityController::control_loop_callback, this));
 
         RCLCPP_INFO(this->get_logger(), "UR5 持续速度控制器已初始化。");
         RCLCPP_INFO(this->get_logger(), "等待第一个有效的 /joint_states 消息...");
@@ -128,6 +128,7 @@ private:
         std::vector<double> new_positions(num_expected_joints_);
         bool new_positions_valid = false;
 
+        // 如果消息包含有效的关节名称和位置
         if (!msg->name.empty() && msg->name.size() == msg->position.size()) {
             std::map<std::string, double> current_joint_map;
             for (size_t i = 0; i < msg->name.size(); ++i) {
@@ -148,11 +149,11 @@ private:
                 }
             }
             if (all_expected_found) {
-                new_positions_valid = true;
+                new_positions_valid = true; // 所有预期关节都已找到
             }
         }
 
-        if (!new_positions_valid) {
+        if (!new_positions_valid) { // 如果名称映射失败或名称不可用
             if (msg->position.size() == num_expected_joints_) {
                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
                                      "使用来自JointState消息的直接关节顺序。原因: 名称映射失败，名称不可用，或名称不存在但位置计数 (%zu) 与预期 (%zu) 匹配。",
