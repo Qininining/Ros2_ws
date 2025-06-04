@@ -6,9 +6,9 @@ class TeleopServoNode : public rclcpp::Node
 {
 public:
     TeleopServoNode()
-    : Node("teleop_servo_node"),
-      delta_linear_(0.1),    // m/s
-      delta_angular_(0.5)    // rad/s
+    : Node("ur_servo_velocity_node"),
+      delta_linear_(0.03),    // m/s
+      delta_angular_(M_PI/120)    // 大概 0.026 rad/s   ，约等于 1.5 角度/s
     {
         this->get_logger().set_level(rclcpp::Logger::Level::Info);
         twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
@@ -37,7 +37,15 @@ private:
         bool updated = true;
 
         // 清零
-        geometry_msgs::msg::TwistStamped twist = current_twist_;
+        // geometry_msgs::msg::TwistStamped twist = current_twist_;
+        geometry_msgs::msg::TwistStamped twist;
+        twist.twist.linear.x = 0.0;
+        twist.twist.linear.y = 0.0;
+        twist.twist.linear.z = 0.0;
+        twist.twist.angular.x = 0.0;
+        twist.twist.angular.y = 0.0;
+        twist.twist.angular.z = 0.0;
+        
         switch (key) {
             case 'w': twist.twist.linear.x  = +delta_linear_;  break;
             case 's': twist.twist.linear.x  = -delta_linear_;  break;
