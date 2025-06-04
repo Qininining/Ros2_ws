@@ -8,6 +8,11 @@
 ```bash
 ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5 robot_ip:=169.254.0.10 launch_rviz:=false kinematics_params_file:="${HOME}/my_robot_calibration.yaml"
 ```
+**注意**: 需要确保运行的ur驱动是自己包里的而不是安装在环境中的。通过命令：
+```bash
+ros2 pkg prefix ur_moveit_config
+```
+可以查看当前使用的 `ur_moveit_config` 包的路径，确保其指向的是你自己的工作空间。（ROS默认：若包内与环境内同时存在，则优先使用包内的配置）
 
 ### 2. 启动 MoveIt 和 Servo
 ```bash
@@ -46,7 +51,7 @@ joint_topic: /joint_states
 status_topic: ~/status # Publish status to this topic
 command_out_topic: /forward_position_controller/commands # Publish outgoing commands here
 ```
-**注意**: 更换/forward_position_controller/commands与 `/forward_velocity_controller/commands` 的同时，需要更换：
+**注意**: 更换 `/forward_position_controller/commands` 与 `/forward_velocity_controller/commands` 的同时，需要更换：
 ```yaml
 # 内容节选自 ur_moveit_config/config/ur_servo.yaml
 # What to publish? Can save some bandwidth as most robots only require positions or velocities
@@ -99,17 +104,17 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5 robot_ip:=169.254.
 ## 当前存在的问题
 
 1.  **`ur_velocity_controller_node`** (速度控制):
-    *   **问题**: 缺少奇异值判断 (可能导致关节速度过大失控)。
-    *   **问题**: 缺少碰撞检测。
-    *   **问题**: 缺少极限位置下的速度归零机制。
-    *   **问题**: 速度计算错误，会有偏差。
+    *   ***(1)***: 缺少奇异值判断 (可能导致关节速度过大失控)。
+    *   ***(2)***: 缺少碰撞检测。
+    *   ***(3)***: 缺少极限位置下的速度归零机制。
+    *   ***(4)***: 速度计算错误，会有偏差。
 2.  **`ur5_kinematics_controller_node`** (位置控制):
-    *   **问题**: 逆解多解问题 – 微小位移可能导致关节运动幅度过大。
+    *   ***(1)***: 逆解多解问题 – 微小位移可能导致关节运动幅度过大。
         *   **初步解决方案**: 后续加入解析解求解，并选取最优解作为逆解初值，以实现稳定控制。
-    *   **问题**: 有奇异检测，但缺乏相应处理措施。
+    *   ***(2)***: 有奇异检测，但缺乏相应处理措施。
         *   **改进方向**: 增加奇异值处理、关节限制、碰撞检测等措施。
-    *   **问题**: 旋转是按照 `tool0` 坐标进行的，但xyz移动是按照 `base_link` 坐标进行的。
+    *   ***(3)***: 旋转是按照 `tool0` 坐标进行的，但xyz移动是按照 `base_link` 坐标进行的。
 3.  **`moveit_servo`** (末端执行器控制):
-    *   **问题**: `forward_position_controller` 控制过程中会有速度的突变，导致机械臂抖动（在速度较快时出现）。
-    *   **问题**: `forward_velocity_controller` 控制模式下不好用，还需熟练熟练再制定操作方案。还是位置轨迹控制来间接控制速度好用。
+    *   ***(1)***: `forward_position_controller` 控制过程中会有速度的突变，导致机械臂抖动（在速度较快时出现）。
+    *   ***(2)***: `forward_velocity_controller` 控制模式下不好用，还需熟练熟练再制定操作方案。还是位置轨迹控制来间接控制速度好用。
 
