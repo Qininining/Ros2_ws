@@ -521,11 +521,19 @@ std::vector<double> KinematicsSolver::computeJointVelocities(
 
     try {
         cv::Mat J_s = computeJacobianSpace(q_current);
+
+        bool is_singular = this->isSingular(J_s);
+
+        std::cout << "is_singular: " << is_singular << std::endl;
+
+        std::cout << "computeJointVelocities: 计算的雅可比矩阵" << std::endl << J_s << std::endl;
+
         cv::Mat q_dot_mat;
-        cv::Mat V_s_desired_mat(6, 1, CV_64F);
-        for (int i = 0; i < 6; ++i) {
-            V_s_desired_mat.at<double>(i, 0) = V_s_desired(i);
-        }
+        // cv::Mat V_s_desired_mat(6, 1, CV_64F);
+        // for (int i = 0; i < 6; ++i) {
+        //     V_s_desired_mat.at<double>(i, 0) = V_s_desired(i);
+        // }
+        cv::Mat V_s_desired_mat = cv::Mat(V_s_desired);
 
         if (lambda <= 1e-9) { // 如果 lambda 接近零，使用标准伪逆 (SVD)
             if (!cv::solve(J_s, V_s_desired_mat, q_dot_mat, cv::DECOMP_SVD)) {
@@ -549,9 +557,10 @@ std::vector<double> KinematicsSolver::computeJointVelocities(
         }
 
         std::vector<double> q_dot(num_joints);
-        for (size_t i = 0; i < num_joints; ++i) {
-            q_dot[i] = q_dot_mat.at<double>(static_cast<int>(i), 0);
-        }
+        // for (size_t i = 0; i < num_joints; ++i) {
+        //     q_dot[i] = q_dot_mat.at<double>(static_cast<int>(i), 0);
+        // }
+        q_dot_mat.copyTo(q_dot);
         return q_dot;
 
     } catch (const InvalidInputException& e) {
