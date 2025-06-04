@@ -55,10 +55,10 @@ class UR5VelocityController : public rclcpp::Node
 public:
     UR5VelocityController()
     : Node("ur5_velocity_controller"),
-      delta_linear_velocity_(0.005), // m/s
-      delta_angular_velocity_(M_PI / 180.0), // rad/s (约 1 deg/s)
+      delta_linear_velocity_(0.01), // m/s
+      delta_angular_velocity_(M_PI / 90.0), // rad/s (约 1 deg/s)
       joint_states_received_(false),
-      control_loop_rate_(50.0) // Hz, 控制循环频率
+      control_loop_rate_(125.0) // Hz, 控制循环频率
     {
         // 设置日志级别为DEBUG以显示所有信息
         this->get_logger().set_level(rclcpp::Logger::Level::Debug);
@@ -113,6 +113,7 @@ public:
         };
         num_expected_joints_ = expected_joint_names_.size();
         q_current_.resize(num_expected_joints_, 0.0);
+        // q_dot_current_.resize(num_expected_joints_, 0.0);
 
         RCLCPP_INFO(this->get_logger(), "UR5 持续速度控制器已初始化。");
         RCLCPP_INFO(this->get_logger(), "等待第一个有效的 /joint_states 消息...");
@@ -126,13 +127,16 @@ private:
     void joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
     {
         std::vector<double> new_positions(num_expected_joints_);
+        // std::vector<double> new_velocities(num_expected_joints_, 0.0);
         bool new_positions_valid = false;
 
         // 如果消息包含有效的关节名称和位置
         if (!msg->name.empty() && msg->name.size() == msg->position.size()) {
             std::map<std::string, double> current_joint_map;
+            // std::map<std::string, double> current_joint_dot_map;
             for (size_t i = 0; i < msg->name.size(); ++i) {
                 current_joint_map[msg->name[i]] = msg->position[i];
+                // current_joint_dot_map[msg->name[i]] = msg->velocity[i];
             }
 
             bool all_expected_found = true;
@@ -151,7 +155,20 @@ private:
             if (all_expected_found) {
                 new_positions_valid = true; // 所有预期关节都已找到
             }
+
+        //     for (size_t i = 0; i < num_expected_joints_; ++i) {
+        //         if(current_joint_dot_map.count(expected_joint_names_[i])) {
+        //         new_velocities[i] = current_joint_dot_map[expected_joint_names_[i]];
+        //         } else {
+        //             RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+        //                                         "期望关节 '" << expected_joint_names_[i] 
+        //                                         << "' 未在JointState消息中按名称找到速度。收到的名称列表: " 
+        //                                         << msg->name);
+        //         }
+        //     }
         }
+
+        // q_dot_current_ = new_velocities; // 更新当前关节速度
 
         if (!new_positions_valid) { // 如果名称映射失败或名称不可用
             if (msg->position.size() == num_expected_joints_) {
@@ -254,13 +271,13 @@ private:
             return;
         }
         
-        if (q_current_.size() != num_expected_joints_) {
-             RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                                  "控制循环: q_current_ 大小无效 (%zu vs %zu)。发布零速度。", q_current_.size(), num_expected_joints_);
-             V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 安全措施
-             publish_zero_velocities();
-             return;
-        }
+        // if (q_current_.size() != num_expected_joints_) {
+        //      RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+        //                           "控制循环: q_current_ 大小无效 (%zu vs %zu)。发布零速度。", q_current_.size(), num_expected_joints_);
+        //      V_s_last_commanded_ = cv::Vec6d(0,0,0,0,0,0); // 安全措施
+        //      publish_zero_velocities();
+        //      return;
+        // }
 
         bool is_stopped = true;
         for(int i=0; i<6; ++i) {
@@ -278,6 +295,8 @@ private:
         }
 
         RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: 目标 V_s: " << V_s_last_commanded_ << ", 当前 q: " << q_current_);
+        RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: 目标 V_s: " << V_s_last_commanded_ << ", 当前 q: " << q_current_);
+
 
         try {
             std::vector<double> q_dot = solver_->computeJointVelocities(V_s_last_commanded_, q_current_, 0);
@@ -288,6 +307,24 @@ private:
                 joint_velocity_publisher_->publish(velocity_msg);
                 RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "控制循环: 发布的 q_dot: " << q_dot);
                 RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: 已发布关节速度指令。q_dot: " << q_dot);
+
+                // cv::Vec6d V_s_has_send_commanded = solver_->computeEndEffectorVelocity(q_current_, q_dot);
+                // RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: 计算的末端执行器速度 V_s_has_send_commanded: " << V_s_has_send_commanded);
+
+                // // 计算V_s_has_send_commanded和V_s_last_commanded_的差异
+                // cv::Vec6d V_s_diff = V_s_has_send_commanded - V_s_last_commanded_;
+                // // 以小数点后9位格式化输出，必须是小数点后9位。不然精度不够
+                // RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: V_s_has_send_commanded 和 V_s_last_commanded_ 的差异: " << V_s_diff);
+
+                // // 计算q_dot_current_和 q_dot 的差异
+                // cv::Vec6d q_dot_diff;
+                // for (size_t i = 0; i < num_expected_joints_; ++i) {
+                //     q_dot_diff(i) = q_dot[i] - q_dot_current_[i];
+                // }
+                // RCLCPP_INFO_STREAM(this->get_logger(), "控制循环: q_dot_current_ 和 q_dot 的差异: " << q_dot_diff);
+
+                RCLCPP_INFO_STREAM(this->get_logger(), "\n\n");
+
             } else {
                 RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                                       "控制循环: 计算出的 q_dot 大小不正确 (%zu vs %zu)。发布零速度。", 
@@ -325,6 +362,7 @@ private:
     
     cv::Matx44d M_home_; 
     std::vector<double> q_current_; 
+    std::vector<double> q_dot_current_; // 用于存储当前关节速度
     cv::Vec6d V_s_last_commanded_; // 存储上次指令的末端执行器速度
     
     double delta_linear_velocity_;
