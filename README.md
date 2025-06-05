@@ -118,3 +118,9 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5 robot_ip:=169.254.
     *   ***(1)***: `forward_position_controller` 控制过程中会有速度的突变，导致机械臂抖动（在速度较快时出现）。
     *   ***(2)***: `forward_velocity_controller` 控制模式下不好用，还需熟练熟练再制定操作方案。还是位置轨迹控制来间接控制速度好用。
 
+
+
+
+realsense sdk 版本：2.51.1
+realsense ros2 版本：4.51.1
+
