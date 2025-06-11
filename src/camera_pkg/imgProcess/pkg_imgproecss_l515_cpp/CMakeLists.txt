@@ -10,7 +10,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
-find_package(OpenCV REQUIRED) # 查找 OpenCV 库
+find_package(message_filters REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui)
 
 # ******image_subscriber_node******
 add_executable(image_subscriber_node src/image_subscriber_node.cpp)
@@ -36,6 +37,26 @@ target_link_libraries(image_subscriber_node
 )
 install(TARGETS image_subscriber_node
   DESTINATION lib/${PROJECT_NAME})
+
+# ******red_circle_depth_detector_node******
+add_executable(red_circle_depth_detector_node src/red_circle_depth_detector_node.cpp)
+ament_target_dependencies(red_circle_depth_detector_node
+    rclcpp
+    sensor_msgs
+    cv_bridge
+    message_filters
+)
+# 链接 OpenCV 库（解决 undefined reference 错误）
+target_link_libraries(red_circle_depth_detector_node
+  opencv_core
+  opencv_highgui
+  opencv_imgproc
+  opencv_imgcodecs
+)
+install(TARGETS
+  red_circle_depth_detector_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 
 if(BUILD_TESTING)
