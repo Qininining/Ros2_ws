@@ -1,12 +1,12 @@
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/image.hpp"
-#include "sensor_msgs/msg/camera_info.hpp"
-#include "cv_bridge/cv_bridge.h" // 包含 CvBridge 库
+// 移除了 sensor_msgs/msg/image.hpp 和 sensor_msgs/msg/camera_info.hpp
+// 移除了 cv_bridge/cv_bridge.h
 #include "opencv2/opencv.hpp" // 包含 OpenCV 核心库
 
-#include "message_filters/subscriber.h"
-#include "message_filters/synchronizer.h"
-#include "message_filters/sync_policies/approximate_time.h"
+// 移除了 message_filters 相关头文件，因为现在只订阅一个话题
+// #include "message_filters/subscriber.h"
+// #include "message_filters/synchronizer.h"
+// #include "message_filters/sync_policies/approximate_time.h"
 
 // 引入你的 IBVS 类
 #include "pkg_ibvs_cpp/IBVS.hpp"
@@ -21,35 +21,43 @@ public:
     {
         RCLCPP_INFO(this->get_logger(), "IBVS Feature Node has been started.");
 
-        // 创建消息过滤器订阅者
-        rgb_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(this, "/camera/color/image_raw");
-        depth_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(this, "/camera/aligned_depth_to_color/image_raw");
-        camera_info_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CameraInfo>>(this, "/camera/color/camera_info");
-        hand_landmarks_sub_ = std::make_shared<message_filters::Subscriber<hand_tracking_msgs::msg::HandLandmarksDepth>>(this, "/hand_landmarks_depth_data");
-
-        // 使用 ApproximateTimeSynchronizer 进行同步
-        // 现在需要同步四个话题：RGB图像、深度图像、相机信息和手部关键点深度数据
-        sync_ = std::make_shared<message_filters::Synchronizer<MySyncPolicy>>(
-            MySyncPolicy(10), *rgb_sub_, *depth_sub_, *camera_info_sub_, *hand_landmarks_sub_
+        // 仅订阅手部关键点深度话题
+        hand_landmarks_sub_ = this->create_subscription<hand_tracking_msgs::msg::HandLandmarksDepth>(
+            "/hand_landmarks_depth_data", 10,
+            std::bind(&IBVSFeatureNode::handLandmarksCallback, this, std::placeholders::_1)
         );
-        // 注册同步回调函数
-        sync_->registerCallback(std::bind(&IBVSFeatureNode::syncedDataCallback, this,
-                                         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
 
-        RCLCPP_INFO(this->get_logger(), "Subscribed to RGB, Aligned Depth, Camera Info, and Hand Landmarks topics with synchronization.");
+        RCLCPP_INFO(this->get_logger(), "Subscribed to /hand_landmarks_depth_data topic.");
 
-        // 定义期望特征点和它们的深度 (来自用户提供的 YAML 数据)
+        // 定义期望特征点和它们的深度
         // 这些是固定的目标，IBVS会尝试让相机图像中的当前特征移动到这些期望位置
         setDesiredHandLandmarks();
+
+        // 硬编码相机内参和图像尺寸
+        // 使用您之前提供的 L515 相机内参数据
+        cv::Mat K_fixed(3, 3, CV_64F);
+        K_fixed.at<double>(0, 0) = 905.6806640625;   // fx
+        K_fixed.at<double>(0, 1) = 0.0;
+        K_fixed.at<double>(0, 2) = 649.3789672851562; // cx
+        K_fixed.at<double>(1, 0) = 0.0;
+        K_fixed.at<double>(1, 1) = 906.1685791015625; // fy
+        K_fixed.at<double>(1, 2) = 360.2315673828125; // cy
+        K_fixed.at<double>(2, 0) = 0.0;
+        K_fixed.at<double>(2, 1) = 0.0;
+        K_fixed.at<double>(2, 2) = 1.0;
+
+        int image_width = 1280;
+        int image_height = 720;
+
+        // 直接初始化 IBVS 对象
+        ibvs_ = std::make_unique<IBVS>(K_fixed, image_width, image_height);
+        ibvs_->setDesiredFeatures(this->desired_features_); // 将期望特征点设置给 IBVS 对象
+
+        ibvs_initialized_ = true;
+        RCLCPP_INFO(this->get_logger(), "IBVS object initialized with hardcoded camera intrinsics and desired features.");
     }
 
 private:
-    // 定义同步策略，现在包含 HandLandmarksDepth
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image,
-                                                            sensor_msgs::msg::Image,
-                                                            sensor_msgs::msg::CameraInfo,
-                                                            hand_tracking_msgs::msg::HandLandmarksDepth> MySyncPolicy;
-
     void setDesiredHandLandmarks() {
         // 用户提供的期望特征点和深度
         // 注意：这些值是像素坐标和米为单位的深度
@@ -87,7 +95,7 @@ private:
 
         if (desired_features_px.size() != 21) {
             RCLCPP_ERROR(this->get_logger(), "Error: Desired features list does not contain exactly 21 points.");
-            // 可以在这里采取更严格的措施，例如抛出异常
+            // 在实际应用中，这里应该有更健壮的错误处理，例如抛出异常或退出
         } else {
             this->desired_features_ = desired_features_px; // 保存期望特征点
             this->desired_features_depths_ = desired_features_depths_m; // 保存期望特征深度
@@ -95,36 +103,9 @@ private:
         }
     }
 
-    void syncedDataCallback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
-                           const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg,
-                           const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg,
-                           const hand_tracking_msgs::msg::HandLandmarksDepth::ConstSharedPtr& hand_landmarks_msg)
+    // 新的单话题回调函数
+    void handLandmarksCallback(const hand_tracking_msgs::msg::HandLandmarksDepth::ConstSharedPtr& hand_landmarks_msg)
     {
-        // 第一次收到相机内参时初始化 IBVS 对象
-        if (!ibvs_initialized_) {
-            cv::Mat K(3, 3, CV_64F);
-            for (int i = 0; i < 9; ++i) {
-                K.at<double>(i / 3, i % 3) = camera_info_msg->k[i];
-            }
-            ibvs_ = std::make_unique<IBVS>(K, rgb_msg->width, rgb_msg->height);
-            ibvs_->setDesiredFeatures(this->desired_features_); // 将期望特征点设置给 IBVS 对象
-
-            ibvs_initialized_ = true;
-            RCLCPP_INFO(this->get_logger(), "IBVS object initialized with camera intrinsics and desired features.");
-        }
-
-        cv::Mat rgb_image, depth_image;
-        try {
-            // 使用 cv_bridge::toCvCopy() 进行转换
-            // 确保 rgb_msg->encoding 是正确的，例如 "rgb8" 或 "bgr8"
-            // toCvCopy 会返回一个 CvImagePtr，通过其 .image 成员访问 cv::Mat
-            rgb_image = cv_bridge::toCvCopy(rgb_msg, sensor_msgs::image_encodings::BGR8)->image;
-            depth_image = cv_bridge::toCvCopy(depth_msg, sensor_msgs::image_encodings::TYPE_16UC1)->image;
-        } catch (cv_bridge::Exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "CvBridge exception: %s", e.what());
-            return;
-        }
-
         // --- 从接收到的 hand_landmarks_msg 中提取当前特征点和深度 ---
         std::vector<cv::Point2f> current_features;
         std::vector<double> current_features_depths;
@@ -146,6 +127,7 @@ private:
         }
 
         // --- IBVS 算法核心逻辑 ---
+        // 确保 IBVS 对象已初始化，且当前数据有效，且特征点数量与期望一致
         if (ibvs_initialized_ && has_valid_current_data &&
             current_features.size() == desired_features_.size())
         {
@@ -189,19 +171,11 @@ private:
         } else {
             RCLCPP_WARN(this->get_logger(), "Conditions for IBVS calculation not met.");
         }
-
-        // 显示图像 (可选)
-        cv::imshow("RGB Image", rgb_image);
-        cv::waitKey(1); // <--- 修正：使用 cv::waitKey
     }
 
+    // 移除了所有与图像订阅和同步相关的成员变量
     // 移除了 cv_bridge::CvBridge bridge_; 成员变量
-
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> rgb_sub_;
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depth_sub_;
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::CameraInfo>> camera_info_sub_;
-    std::shared_ptr<message_filters::Subscriber<hand_tracking_msgs::msg::HandLandmarksDepth>> hand_landmarks_sub_;
-    std::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync_;
+    std::shared_ptr<rclcpp::Subscription<hand_tracking_msgs::msg::HandLandmarksDepth>> hand_landmarks_sub_; // 仅保留手部数据订阅者
 
     std::unique_ptr<IBVS> ibvs_;
     bool ibvs_initialized_ = false;
