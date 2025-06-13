@@ -14,6 +14,8 @@ find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED) # 添加 message_filters 依赖
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc videoio) # 添加OpenCV依赖
 
+find_package(hand_tracking_msgs REQUIRED) # 添加这行
+
 # 确保在 build 目录中生成编译信息，用于 ROS 2 调试
 # ament_export_dependencies 可以用于导出依赖，以便其他包能够找到这些依赖。
 # 对于内部编译，target_link_libraries 和 ament_target_dependencies 会处理链接。
@@ -52,6 +54,7 @@ ament_target_dependencies(
   cv_bridge
   message_filters
   OpenCV # <--- 修正：将 ${OpenCV_LIBS} 替换为 OpenCV
+  hand_tracking_msgs
 )
 
 install(TARGETS ibvs_feature_node
