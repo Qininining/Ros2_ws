@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(message_filters REQUIRED) # 添加 message_filters 依赖
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc videoio) # 添加OpenCV依赖
 
 # 确保在 build 目录中生成编译信息，用于 ROS 2 调试
@@ -49,6 +50,7 @@ ament_target_dependencies(
   rclcpp
   sensor_msgs
   cv_bridge
+  message_filters
   OpenCV # <--- 修正：将 ${OpenCV_LIBS} 替换为 OpenCV
 )
 
