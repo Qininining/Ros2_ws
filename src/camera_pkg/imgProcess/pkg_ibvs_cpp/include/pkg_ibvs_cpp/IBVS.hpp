@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <iostream>
+#include <string> // Added for std::string in internal function
 
 /**
  * @brief IBVS (Image-Based Visual Servoing) 类
@@ -38,7 +39,7 @@ public:
     cv::Mat calculateImageError(const std::vector<cv::Point2f>& current_features);
 
     /**
-     * @brief 计算图像相互作用矩阵 (Interaction Matrix)
+     * @brief 计算当前图像特征的相互作用矩阵 (Interaction Matrix)
      *
      * 该函数根据当前特征点和其深度信息来计算相互作用矩阵。
      * 这里的深度信息需要根据实际应用获取，通常是通过深度相机或SLAM估计。
@@ -49,6 +50,18 @@ public:
      */
     cv::Mat calculateInteractionMatrix(const std::vector<cv::Point2f>& current_features,
                                        const std::vector<double>& depths_mm_or_m);
+
+    /**
+     * @brief 计算期望图像特征的相互作用矩阵 (Interaction Matrix)
+     *
+     * 该函数根据期望特征点和其对应的深度信息来计算相互作用矩阵。
+     * 期望特征的深度通常是预先设定或估计的，而不是实时获取的。
+     *
+     * @param depths_desired_features_mm_or_m 每个期望特征点的深度值（毫米或米），与 `desired_features_` 一一对应
+     * @return 期望图像特征的相互作用矩阵
+     */
+    cv::Mat calculateDesiredInteractionMatrix(const std::vector<double>& depths_desired_features_mm_or_m);
+
 
     /**
      * @brief 计算相机速度控制律
@@ -68,11 +81,28 @@ public:
      */
     cv::Point2f pixelToNormalizedCameraCoordinates(const cv::Point2f& pixel_point);
 
+    // 公开 desired_features_ 以便在外部访问，例如在 ibvs_feature_node.cpp 中检查特征点数量
+    // 在更严格的设计中，可以通过一个 public getter 方法来访问
+    std::vector<cv::Point2f> desired_features_; ///< 期望的图像特征点
+
 private:
     cv::Mat K_;                     ///< 相机内参矩阵
-    std::vector<cv::Point2f> desired_features_; ///< 期望的图像特征点
     int image_width_;               ///< 图像宽度
     int image_height_;              ///< 图像高度
+
+    /**
+     * @brief 内部辅助函数：计算图像相互作用矩阵。
+     *
+     * 此函数封装了计算相互作用矩阵的通用逻辑，供 public 函数调用。
+     *
+     * @param features 特征点的向量 (可以是当前特征或期望特征)
+     * @param depths_mm_or_m 每个特征点的深度值（毫米或米），与特征点一一对应
+     * @param is_desired_features_context 标记，指示当前计算是否针对期望特征（用于更具体的警告/错误信息）
+     * @return 图像相互作用矩阵
+     */
+    cv::Mat _calculateInteractionMatrixInternal(const std::vector<cv::Point2f>& features,
+                                                 const std::vector<double>& depths_mm_or_m,
+                                                 bool is_desired_features_context);
 };
 
 #endif // IBVS_HPP
