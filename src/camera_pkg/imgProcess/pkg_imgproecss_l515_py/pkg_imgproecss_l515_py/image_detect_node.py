@@ -9,7 +9,7 @@ import message_filters # 用于同步图像消息
 class HandDepthDetector(Node):
     """
     一个 ROS 2 节点，订阅 RGB 和对齐后的深度图像，
-    使用 MediaPipe 进行手部检测，并获取检测到手部的深度信息。
+    使用 MediaPipe 进行手部检测，并获取检测到手部所有关键点的深度信息。
     """
     def __init__(self):
         super().__init__('hand_depth_detector_node')
@@ -48,6 +48,9 @@ class HandDepthDetector(Node):
         # 创建用于显示结果的 OpenCV 窗口
         cv2.namedWindow("手部检测与深度", cv2.WINDOW_AUTOSIZE)
 
+        # 标志，用于确保只打印一次图像尺寸信息
+        self._log_dim_once = False
+
     def __del__(self):
         # 析构函数，确保关闭 OpenCV 窗口
         self.hands.close()
@@ -66,18 +69,8 @@ class HandDepthDetector(Node):
         except Exception as e:
             self.get_logger().error(f"CvBridge 转换图像时出错: {e}")
             return
-
-        # 移除对 empty() 的检查，因为 rgb_image 和 depth_image 是 NumPy 数组，没有 empty() 方法
-        # 如果转换成功，它们就不会是“空”的。如果转换失败，会在上面的 try-except 块中捕获。
-        # if rgb_image.empty() or depth_image.empty():
-        #     self.get_logger().warn("接收到空图像。")
-        #     return
         
         # 首次打印图像尺寸信息，验证 RGB 和深度图像是否已对齐
-        # 使用一个类成员变量来控制只打印一次
-        if not hasattr(self, '_log_dim_once'):
-            self._log_dim_once = False # 初始化标志
-
         if not self._log_dim_once:
             self.get_logger().info(f"RGB 图像尺寸: {rgb_image.shape[1]}x{rgb_image.shape[0]}")
             self.get_logger().info(f"对齐后的深度图像尺寸: {depth_image.shape[1]}x{depth_image.shape[0]}")
@@ -93,43 +86,42 @@ class HandDepthDetector(Node):
         display_image = rgb_image.copy() # 在副本上绘制，不修改原始图像
 
         if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                # 绘制手部关键点
+            for hand_id, hand_landmarks in enumerate(results.multi_hand_landmarks):
+                self.get_logger().info(f"--- 检测到第 {hand_id + 1} 只手 ---")
+                # 绘制手部关键点和连接线
                 self.mp_drawing.draw_landmarks(
                     display_image, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
-                # 获取手腕 (WRIST) 关键点的像素坐标
-                # 手腕是第 0 个关键点
-                wrist_landmark = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST]
-                
-                # 将归一化坐标转换为像素坐标
-                # MediaPipe 提供的坐标是 0-1 范围的比例值
-                wrist_x = int(wrist_landmark.x * rgb_image.shape[1])
-                wrist_y = int(wrist_landmark.y * rgb_image.shape[0])
+                # 遍历手部所有 21 个关键点
+                for i, landmark in enumerate(hand_landmarks.landmark):
+                    # 将归一化坐标转换为像素坐标
+                    # MediaPipe 提供的坐标是 0-1 范围的比例值
+                    px = int(landmark.x * rgb_image.shape[1])
+                    py = int(landmark.y * rgb_image.shape[0])
 
-                # 确保坐标在深度图像范围内 (由于对齐，理论上应该总在范围内)
-                if 0 <= wrist_x < depth_image.shape[1] and \
-                   0 <= wrist_y < depth_image.shape[0]:
+                    depth_value = 0
+                    # 确保坐标在深度图像范围内
+                    if 0 <= px < depth_image.shape[1] and 0 <= py < depth_image.shape[0]:
+                        depth_value = depth_image[py, px]
                     
-                    depth_value = depth_image[wrist_y, wrist_x]
-
-                    # 过滤掉深度值为 0 的情况 (表示无效深度)
                     if depth_value > 0:
                         self.get_logger().info(
-                            f"检测到手部在 (x={wrist_x}, y={wrist_y})。手腕深度: {depth_value} 毫米"
+                            f"  关键点 {self.mp_hands.HandLandmark(i).name} (x={px}, y={py}): 深度 {depth_value} 毫米"
                         )
-                        # 在图像上标注深度信息
-                        depth_text = f"depth: {depth_value} mm"
-                        cv2.putText(display_image, depth_text, (wrist_x + 10, wrist_y - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
+                        # 在图像上标注关键点深度信息 (只选择几个关键点显示，避免图像过于拥挤)
+                        if i == self.mp_hands.HandLandmark.WRIST.value: # 手腕
+                            cv2.putText(display_image, f"Wrist: {depth_value}mm", (px + 10, py - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
+                        elif i == self.mp_hands.HandLandmark.INDEX_FINGER_TIP.value: # 食指指尖
+                             cv2.putText(display_image, f"Index: {depth_value}mm", (px + 10, py - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+                        elif i == self.mp_hands.HandLandmark.MIDDLE_FINGER_TIP.value: # 中指指尖
+                             cv2.putText(display_image, f"Middle: {depth_value}mm", (px + 10, py - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2, cv2.LINE_AA)
                     else:
                         self.get_logger().warn(
-                            f"手部在 (x={wrist_x}, y={wrist_y})，但深度值为 0mm (无效数据)。"
+                            f"  关键点 {self.mp_hands.HandLandmark(i).name} (x={px}, y={py}): 深度值为 0mm 或超出边界 (无效数据)。"
                         )
-                else:
-                    self.get_logger().warn(
-                        f"手部关键点 ({wrist_x}, {wrist_y}) 超出了图像边界。"
-                    )
         else:
             self.get_logger().debug("当前帧未检测到手部。")
 
