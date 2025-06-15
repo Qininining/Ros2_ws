@@ -34,6 +34,10 @@ ros2 run pkg_ibvs_cpp ibvs_feature_node
 ros2 topic echo /hand_landmarks_depth_data
 ```
 
+标定相关：
+安装visp包：github.com/lagadic/vision_visp
+在 `src/camera_pkg/calibration/vision_visp-rolling/visp_tracker` 中的CmakeLists.txt中注视掉下载的bag部分。
+
 ## 方法1: 通过 MoveIt Servo 控制真实 UR5 机械臂
 
 ### 1. 启动 UR5
