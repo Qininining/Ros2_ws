@@ -2,6 +2,27 @@
 
 控制真实 UR5 机械臂。
 
+最简单的运行方法：
+```bash
+ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5 robot_ip:=169.254.0.10 launch_rviz:=false  kinematics_params_file:="${HOME}/my_robot_calibration.yaml"
+
+ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur5 launch_servo:=true
+
+ros2 topic echo /servo_node/status
+
+ros2 control list_controllers
+
+ros2 control switch_controllers --start forward_position_controller --stop scaled_joint_trajectory_controller 
+
+ros2 service call /servo_node/start_servo std_srvs/srv/Trigger "{}"
+
+ros2 run pkg_ur5_control ur5_fk_subscriber_node 
+
+ros2 topic echo /forward_position_controller/commands 
+
+ros2 run pkg_ur_servo_cpp ur_servo_velocity_node
+```
+
 ## 方法1: 通过 MoveIt Servo 控制真实 UR5 机械臂
 
 ### 1. 启动 UR5
