@@ -23,6 +23,17 @@ ros2 topic echo /forward_position_controller/commands
 ros2 run pkg_ur_servo_cpp ur_servo_velocity_node
 ```
 
+相机相关：
+```bash
+ros2 launch realsense2_camera my_rs_launch.py 
+
+ros2 run pkg_imgproecss_l515_py image_detect_node
+
+ros2 run pkg_ibvs_cpp ibvs_feature_node
+
+ros2 topic echo /hand_landmarks_depth_data
+```
+
 ## 方法1: 通过 MoveIt Servo 控制真实 UR5 机械臂
 
 ### 1. 启动 UR5
