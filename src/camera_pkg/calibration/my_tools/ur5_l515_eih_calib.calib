@@ -19,5 +19,3 @@ transform:
     z: -0.3738340529057366
     w: 0.9230655904300494
 
-
-~/.ros/easy_handeye/<calibration_name>.yaml
