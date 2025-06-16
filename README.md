@@ -43,14 +43,9 @@ ros2 launch ros2_aruco my_aruco_recognition.launch.py
 
 ros2 topic echo /aruco_poses
 
-ros2 launch easy_handeye2 calibrate.launch.py \
-  calibration_type:="eye_in_hand" \
-  name:="ur5_l515_eih_calib" \
-  robot_base_frame:="base_link" \
-  robot_effector_frame:="tool0" \
-  tracking_base_frame:="camera_color_optical_frame" \
-  tracking_target_frame:="aruco_marker_0" \
-  freehand_robot_movement:=true
+ros2 launch easy_handeye2 my_calibration.launch.py   calibration_type:="eye_in_hand"   name:="ur5_l515_eih_calib"   robot_base_frame:="base_link"   robot_effector_frame:="tool0"   tracking_base_frame:="camera_color_optical_frame"   tracking_target_frame:="aruco_marker_0"   freehand_robot_movement:=true
+
+/opt/ros/humble/lib/rqt_tf_tree/rqt_tf_tree
 ```
 
 ## 方法1: 通过 MoveIt Servo 控制真实 UR5 机械臂
